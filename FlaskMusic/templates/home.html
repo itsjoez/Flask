@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home | Maestro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Modern Design Variables */
+        :root {
+            --primary-color: #2D46B9;
+            --primary-gradient: linear-gradient(135deg, #2D46B9, #5E72EB);
+            --secondary-color: #FF5757;
+            --dark-bg: #121212;
+            --card-bg: #1E1E1E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B3B3B3;
+            --success: #1DB954;
+            --border-radius: 12px;
+            --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            --transition: all 0.3s ease;
+        }
+
+        /* General Styles */
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+
+        .app-logo {
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+
+        .app-logo i {
+            color: var(--primary-color);
+            margin-right: 1rem;
+            font-size: 3rem;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            max-width: 800px;
+        }
+
+        p.tagline {
+            font-size: 1.3rem;
+            color: var(--text-secondary);
+            margin-bottom: 3rem;
+            text-align: center;
+            max-width: 700px;
+            line-height: 1.6;
+        }
+
+        /* Options Cards */
+        .options {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .option-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            min-width: 240px;
+            box-shadow: var(--card-shadow);
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: var(--transition);
+        }
+
+        .option-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+            border-color: var(--primary-color);
+        }
+
+        .option-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            color: var(--primary-color);
+        }
+
+        .option-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .option-description {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+        }
+
+        .option-button {
+            display: inline-block;
+            padding: 0.8rem 1.5rem;
+            background: var(--primary-gradient);
+            color: white;
+            text-decoration: none;
+            border-radius: var(--border-radius);
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .option-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(45, 70, 185, 0.4);
+        }
+
+        .option-button.success {
+            background: var(--success);
+            color: black;
+        }
+
+        .option-button.success:hover {
+            box-shadow: 0 5px 15px rgba(29, 185, 84, 0.4);
+        }
+
+        /* Footer */
+        .footer {
+            margin-top: 4rem;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Media Queries */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.3rem;
+            }
+
+            p.tagline {
+                font-size: 1.1rem;
+            }
+
+            .options {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .option-card {
+                width: 100%;
+                max-width: 350px;
+            }
+        }
+
+        /* Flash Messages */
+        .flash-messages {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 300px;
+        }
+
+        .alert {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            animation: slideIn 0.3s ease forwards;
+        }
+
+        .alert-success {
+            background: var(--success);
+            color: black;
+        }
+
+        .alert-error {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Flash Messages -->
+    <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <div class="app-logo">
+        <i class="fas fa-headphones-alt"></i>
+        <span>Maestro</span>
+    </div>
+
+    <h1>Discover Your Next Favorite Song</h1>
+
+    <p class="tagline">
+        Maestro helps you find new music based on your taste. Tell us what you like, and we'll recommend songs and artists that match your vibe.
+    </p>
+
+    <div class="options">
+        {% if not current_user.is_authenticated %}
+            <div class="option-card">
+                <div class="option-icon">
+                    <i class="fas fa-sign-in-alt"></i>
+                </div>
+                <div class="option-title">Login</div>
+                <div class="option-description">
+                    Already have an account? Sign in to access your personalized music recommendations.
+                </div>
+                <a href="{{ url_for('login') }}" class="option-button">Login</a>
+            </div>
+
+            <div class="option-card">
+                <div class="option-icon">
+                    <i class="fas fa-user-plus"></i>
+                </div>
+                <div class="option-title">Sign Up</div>
+                <div class="option-description">
+                    New to Maestro? Create an account to start discovering music tailored to your taste.
+                </div>
+                <a href="{{ url_for('signup') }}" class="option-button success">Create Account</a>
+            </div>
+        {% else %}
+            <div class="option-card">
+                <div class="option-icon">
+                    <i class="fas fa-search"></i>
+                </div>
+                <div class="option-title">Find Music</div>
+                <div class="option-description">
+                    Discover new songs and artists based on your preferences.
+                </div>
+                <a href="{{ url_for('index') }}" class="option-button">Get Recommendations</a>
+            </div>
+
+            <div class="option-card">
+                <div class="option-icon">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="option-title">Your Profile</div>
+                <div class="option-description">
+                    View and update your profile, manage your favorite artists and songs.
+                </div>
+                <a href="{{ url_for('profile') }}" class="option-button success">Go to Profile</a>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="footer">
+        &copy; 2025 Maestro Music Recommender
+    </div>
+
+    <script>
+        // Auto-hide flash messages after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    alert.remove();
+                }, 300);
+            });
+        }, 5000);
+    </script>
+</body>
+</html>
