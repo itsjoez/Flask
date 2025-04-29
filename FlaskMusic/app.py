@@ -1,135 +1,90 @@
-from flask import Flask, request, render_template, redirect, url_for, flash
+from flask import Flask, request, render_template, redirect, url_for, flash, make_response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-import pandas as pd
-import random
-import os
 from werkzeug.utils import secure_filename
+import os
 import json
 import pylast
 
-# Create the application instance
+# --- Create the application instance ---
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # Change this to a secure key
 
-# Configure the SQLite database - use absolute path for reliability
-db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'users.db')
-# Delete existing database if it exists to force recreation with new schema
-if os.path.exists(db_path):
-    try:
-        os.remove(db_path)
-        print(f"Removed existing database at {db_path}")
-    except Exception as e:
-        print(f"Could not remove existing database: {e}")
+# Secret key for sessions (use environment variable if possible)
+app.secret_key = os.environ.get('SECRET_KEY', 'your_secret_key')
 
+# --- Configure database ---
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(BASE_DIR, 'users.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configure upload settings
-UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'static/uploads')
+# --- Configure upload settings ---
+UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Create the upload directory if it doesn't exist
+# Create necessary folders
+os.makedirs(os.path.join(BASE_DIR, 'static'), exist_ok=True)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Make sure the static folder exists
-os.makedirs(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'static'), exist_ok=True)
-
-# Print the database path to verify location
-print(f"Database path: {db_path}")
-
-# Initialize the database
+# --- Initialize extensions ---
 db = SQLAlchemy(app)
-
-# Initialize Flask-Login
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Set up Last.fm API
-API_KEY = '2bbf4f41f9948d580841b4ad251a1e1c'  # Replace with your actual API key
-API_SECRET = 'd8469f12eeca4373ac6815213c4727fc'  # Replace with your actual API secret
+# --- Last.fm API setup ---
+API_KEY = '2bbf4f41f9948d580841b4ad251a1e1c'
+API_SECRET = 'd8469f12eeca4373ac6815213c4727fc'
+network = pylast.LastFMNetwork(api_key=API_KEY, api_secret=API_SECRET)
 
-# Set up Last.fm network
-network = pylast.LastFMNetwork(
-    api_key=API_KEY,
-    api_secret=API_SECRET
-)
-
-
-# Helper function for file uploads
+# --- Helper for uploads ---
 def allowed_file(filename):
-    return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
-# User model
+# --- User model ---
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
+    password = db.Column(db.String(255), nullable=False)
     profile_pic = db.Column(db.String(255), default='default-profile.png')
     favorite_artist = db.Column(db.String(255), default='')
     favorite_song = db.Column(db.String(255), default='')
     favorite_genre = db.Column(db.String(255), default='')
-    recent_vibes = db.Column(db.Text, default='[]')  # Store as JSON string
+    recent_vibes = db.Column(db.Text, default='[]')
+    recent_artists = db.Column(db.Text, default='[]')
+    
 
     def __repr__(self):
         return f'<User {self.username}>'
 
-
+# --- User loader for Flask-Login ---
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# --- Handle unauthorized access for API calls ---
+@login_manager.unauthorized_handler
+def unauthorized_callback():
+    if request.is_json or request.accept_mimetypes.accept_json:
+        return make_response(jsonify({'status': 'error', 'message': 'Unauthorized'}), 401)
+    else:
+        return redirect(url_for('login'))
 
-# Create a default profile picture if it doesn't exist
-default_pic_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'static', 'default-profile.png')
-if not os.path.exists(default_pic_path):
-    # Create a simple placeholder image or copy from elsewhere
-    try:
-        # If you have PIL installed you could create an image, but for simplicity let's just create an empty file
-        with open(default_pic_path, 'w') as f:
-            f.write('placeholder')
-        print(f"Created placeholder default profile picture at {default_pic_path}")
-    except Exception as e:
-        print(f"Could not create default profile picture: {e}")
-
-# Create database tables
+# --- Initialize database and create default user if empty ---
 with app.app_context():
-    try:
-        db.create_all()
-        print("Database tables created successfully")
+    db.create_all()
+    if User.query.count() == 0:
+        test_user = User(
+            username='test',
+            email='test@example.com',
+            password='test',
+            profile_pic='default-profile.png'
+        )
+        db.session.add(test_user)
+        db.session.commit()
 
-        # Check if any users exist
-        user_count = User.query.count()
-        print(f"Number of users in database: {user_count}")
-
-        # Create a test user if no users exist
-        if user_count == 0:
-            test_user = User(
-                username="test",
-                email="test@example.com",
-                password="test",
-                profile_pic="default-profile.png",
-                favorite_artist="",
-                favorite_song="",
-                favorite_genre="",
-                recent_vibes="[]"
-            )
-            db.session.add(test_user)
-            try:
-                db.session.commit()
-                print("Test user created successfully!")
-            except Exception as e:
-                db.session.rollback()
-                print(f"Error creating test user: {e}")
-    except Exception as e:
-        print(f"Error creating database tables: {e}")
-
-
-# New Last.fm recommendation functions
+# (continue with your Last.fm recommendation functions, routes, etc.)
 
 def get_recommendations_by_song(track_name, artist_name=None, num_recommendations=10):
     """Find a song on Last.fm and recommend similar tracks with album artwork."""
@@ -296,7 +251,7 @@ def recommend_music(song, artist):
             result_html += '<div class="recommendation-grid">'
 
             for rec in recommendations:
-                image_url = rec.get('image_url') or '/static/default-album.svg'  # Use Maestro logo if no image
+                image_url = rec.get('image_url') or '/static/default-album.svg'
 
                 result_html += f'''
                 <div class="recommendation-card">
@@ -309,9 +264,14 @@ def recommend_music(song, artist):
                     <div class="rec-info">
                         <h3 class="song-title">{rec['track_name']}</h3>
                         <p class="artist-name">{rec['artist_name']}</p>
-                        <a href="{rec['url']}" target="_blank" class="lastfm-link">
-                            <i class="fas fa-external-link-alt"></i> Last.fm
-                        </a>
+                        <div class="button-group">
+                            <a href="{rec['url']}" target="_blank" class="lastfm-link">
+                                <i class="fas fa-external-link-alt"></i> Last.fm
+                            </a>
+                            <button class="add-button" onclick="addToPlaylist('{rec['track_name']}', '{rec['artist_name']}')">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
                     </div>
                 </div>
                 '''
@@ -332,7 +292,7 @@ def recommend_music(song, artist):
             result_html += '<div class="recommendation-grid">'
 
             for rec in artist_recommendations:
-                image_url = rec.get('image_url') or '/static/default-artist.svg'  # Use Maestro logo if no image
+                image_url = rec.get('image_url') or '/static/default-artist.svg'
 
                 result_html += f'''
                 <div class="recommendation-card">
@@ -345,9 +305,14 @@ def recommend_music(song, artist):
                     <div class="rec-info">
                         <h3 class="artist-title">{rec['name']}</h3>
                         <p class="genre-name">Genre: {rec['genre']}</p>
-                        <a href="{rec['url']}" target="_blank" class="lastfm-link">
-                            <i class="fas fa-external-link-alt"></i> Last.fm
-                        </a>
+                        <div class="button-group">
+                            <a href="{rec['url']}" target="_blank" class="lastfm-link">
+                                <i class="fas fa-external-link-alt"></i> Last.fm
+                            </a>
+                            <button class="add-button" onclick="addArtistToPlaylist('{rec['name']}')">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
                     </div>
                 </div>
                 '''
@@ -356,90 +321,71 @@ def recommend_music(song, artist):
             return result_html
 
     return "No recommendations found. Try another song or artist."
-# Routes for authentication
+
+
+# Routes
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
-
     if request.method == 'POST':
         username = request.form.get('username')
         email = request.form.get('email')
         password = request.form.get('password')
 
-        print(f"Signup attempt: {username}, {email}")
-
-        # Check if username or email already exists
         if User.query.filter_by(username=username).first():
             flash('Username already exists!', 'error')
         elif User.query.filter_by(email=email).first():
             flash('Email already exists!', 'error')
         else:
-            # Create a new user
-            new_user = User(username=username, email=email, password=password)  # In a real app, hash the password!
+            new_user = User(username=username, email=email, password=password)
             db.session.add(new_user)
             try:
                 db.session.commit()
-                print(f"User {username} created successfully!")
                 flash('Account created successfully!', 'success')
                 return redirect(url_for('login'))
-            except Exception as e:
+            except Exception:
                 db.session.rollback()
-                print(f"Error creating user: {e}")
                 flash('Error creating account. Please try again.', 'error')
-
     return render_template('signup.html')
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # If user is already logged in, redirect to index
     if current_user.is_authenticated:
         return redirect(url_for('index'))
-
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-
-        # Debug: print the submitted credentials
-        print(f"Login attempt: {username}, {password}")
-
         user = User.query.filter_by(username=username).first()
-
-        # Debug: print if user was found
-        print(f"User found: {user is not None}")
-        if user:
-            print(f"User details: {user.username}, {user.email}")
-
-        if user and user.password == password:  # In a real app, verify hashed password!
+        if user and user.password == password:
             login_user(user)
             flash('Logged in successfully!', 'success')
             return redirect(url_for('index'))
         else:
             flash('Invalid username or password!', 'error')
-
     return render_template('login.html')
-
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))  # Changed from 'home' to 'login'
+    return redirect(url_for('login'))
 
-
-# Profile page
 @app.route('/profile')
 @login_required
 def profile():
     recent_vibes = []
+    recent_artists = []
     try:
         recent_vibes = json.loads(current_user.recent_vibes)
     except:
         pass
+    try:
+        recent_artists = json.loads(current_user.recent_artists)
+    except:
+        pass
 
-    # Verify if the profile pic exists, if not, reset to default
     if current_user.profile_pic != 'default-profile.png':
         pic_path = os.path.join(app.config['UPLOAD_FOLDER'], current_user.profile_pic)
         if not os.path.exists(pic_path):
@@ -449,91 +395,58 @@ def profile():
             except:
                 db.session.rollback()
 
-    return render_template('profile.html', user=current_user, recent_vibes=recent_vibes)
+    return render_template('profile.html', user=current_user, recent_vibes=recent_vibes, recent_artists=recent_artists)
 
 
-# Profile update route
 @app.route('/update_profile', methods=['POST'])
 @login_required
 def update_profile():
-    # Handle profile picture upload
     if 'profile_pic' in request.files:
         file = request.files['profile_pic']
-        if file and file.filename != '' and allowed_file(file.filename):
-            # Delete previous profile pic if it's not the default
+        if file and file.filename and allowed_file(file.filename):
             if current_user.profile_pic != 'default-profile.png':
-                try:
-                    old_pic_path = os.path.join(app.config['UPLOAD_FOLDER'], current_user.profile_pic)
-                    if os.path.exists(old_pic_path):
-                        os.remove(old_pic_path)
-                except Exception as e:
-                    print(f"Error removing old profile pic: {e}")
-
-            # Save new profile pic
+                old_pic = os.path.join(app.config['UPLOAD_FOLDER'], current_user.profile_pic)
+                if os.path.exists(old_pic):
+                    os.remove(old_pic)
             filename = secure_filename(file.filename)
-            # Add username prefix to avoid filename conflicts
-            unique_filename = f"{current_user.username}_{filename}"
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
-            current_user.profile_pic = unique_filename
-
-    # Update favorites
+            unique_name = f"{current_user.username}_{filename}"
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_name))
+            current_user.profile_pic = unique_name
     favorite_artist = request.form.get('favorite_artist')
     favorite_song = request.form.get('favorite_song')
     favorite_genre = request.form.get('favorite_genre')
-
-    if favorite_artist:
-        current_user.favorite_artist = favorite_artist
-    if favorite_song:
-        current_user.favorite_song = favorite_song
-    if favorite_genre:
-        current_user.favorite_genre = favorite_genre
-
-    # Handle recently vibed with
+    if favorite_artist: current_user.favorite_artist = favorite_artist
+    if favorite_song: current_user.favorite_song = favorite_song
+    if favorite_genre: current_user.favorite_genre = favorite_genre
     recent_vibe = request.form.get('recent_vibe')
     if recent_vibe:
-        # Get current recent vibes list
         try:
-            recent_vibes = json.loads(current_user.recent_vibes)
+            vibes = json.loads(current_user.recent_vibes)
         except:
-            recent_vibes = []
-
-        # Add new vibe to the beginning of the list
-        recent_vibes.insert(0, recent_vibe)
-
-        # Keep only the latest 5 vibes
-        recent_vibes = recent_vibes[:5]
-
-        # Save back to the database
-        current_user.recent_vibes = json.dumps(recent_vibes)
-
-    # Save all changes to the database
+            vibes = []
+        vibes.insert(0, recent_vibe)
+        current_user.recent_vibes = json.dumps(vibes[:5])
     try:
         db.session.commit()
         flash('Profile updated successfully!', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error updating profile: {e}', 'error')
-
     return redirect(url_for('profile'))
 
-
-# Main index route
 @app.route('/', methods=['GET', 'POST'])
 def home():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     return render_template('home.html')
 
-
 @app.route('/index', methods=['GET', 'POST'])
 @login_required
 def index():
     output = None
     if request.method == 'POST':
-        # Get inputs from the HTML form
         song = request.form.get('song', '').strip()
         artist = request.form.get('artist', '').strip()
-
         if not song and not artist:
             output = "Please enter a song or an artist."
         else:
@@ -542,9 +455,120 @@ def index():
             except Exception as e:
                 output = f"Error getting recommendations: {str(e)}"
                 print(f"Last.fm API error: {e}")
-
-    # Render the HTML template with the output
     return render_template('index.html', output=output)
+
+@app.route('/add_to_playlist', methods=['POST'])
+@login_required
+def add_to_playlist():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+
+    item = data.get('item', '').strip()
+
+    if not item:
+        return jsonify({'status': 'error', 'message': 'No item provided'}), 400
+
+    try:
+        # Load existing recent vibes
+        if current_user.recent_vibes:
+            vibes = json.loads(current_user.recent_vibes)
+        else:
+            vibes = []
+
+        # Insert the new item
+        vibes.insert(0, item)
+        current_user.recent_vibes = json.dumps(vibes[:10])  # Keep only last 10 items
+
+        db.session.commit()
+        return jsonify({'status': 'success'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    
+@app.route('/delete_from_playlist', methods=['POST'])
+@login_required
+def delete_from_playlist():
+    data = request.get_json()
+    item = data.get('item', '').strip()
+
+    if not item:
+        return jsonify({'status': 'error', 'message': 'No item provided'}), 400
+
+    try:
+        if current_user.recent_vibes:
+            vibes = json.loads(current_user.recent_vibes)
+        else:
+            vibes = []
+
+        # Remove only the first occurrence of the item
+        if item in vibes:
+            vibes.remove(item)
+
+        current_user.recent_vibes = json.dumps(vibes)
+
+        db.session.commit()
+        return jsonify({'status': 'success'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    
+@app.route('/add_artist_to_playlist', methods=['POST'])
+@login_required
+def add_artist_to_playlist():
+    data = request.get_json()
+    item = data.get('item', '').strip()
+
+    if not item:
+        return jsonify({'status': 'error', 'message': 'No artist provided'}), 400
+
+    try:
+        if current_user.recent_artists:
+            artists = json.loads(current_user.recent_artists)
+        else:
+            artists = []
+
+        artists.insert(0, item)
+        current_user.recent_artists = json.dumps(artists[:10])
+
+        db.session.commit()
+        return jsonify({'status': 'success'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    
+@app.route('/delete_artist_from_playlist', methods=['POST'])
+@login_required
+def delete_artist_from_playlist():
+    data = request.get_json()
+    item = data.get('item', '').strip()
+
+    if not item:
+        return jsonify({'status': 'error', 'message': 'No artist provided'}), 400
+
+    try:
+        if current_user.recent_artists:
+            artists = json.loads(current_user.recent_artists)
+        else:
+            artists = []
+
+        if item in artists:
+            artists.remove(item)
+
+        current_user.recent_artists = json.dumps(artists)
+        db.session.commit()
+        return jsonify({'status': 'success'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 
 if __name__ == '__main__':

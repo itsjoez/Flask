@@ -100,6 +100,7 @@
             margin-bottom: 0.5rem;
             background: var(--primary-gradient);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -369,10 +370,175 @@
                 font-size: 0.9rem;
             }
         }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .add-button {
+            background-color: var(--success);
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            color: black;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .add-button:hover {
+            background-color: #1ed760;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: var(--success);
+            color: black;
+            padding: 1rem 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            font-weight: 600;
+            animation: slideInFadeOut 4s forwards;
+        }
+
+        @keyframes slideInFadeOut {
+            0% { transform: translateX(100%); opacity: 0; }
+            10% { transform: translateX(0); opacity: 1; }
+            90% { transform: translateX(0); opacity: 1; }
+            100% { transform: translateX(100%); opacity: 0; }
+        }
     </style>
 </head>
+    <script>
+    function showToast(message) {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.classList.add('toast');
+        toast.textContent = message;
+        toastContainer.appendChild(toast);
+    
+        setTimeout(() => {
+            toast.remove();
+        }, 4000); // Toast disappears after 4 seconds
+    }
+    
+    function addToPlaylist(item, artist) {
+        let fullItem = artist ? `${item} by ${artist}` : item;
+    
+        fetch('/add_to_playlist', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ item: fullItem })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                showToast('✅ Added to your playlist!');
+            } else {
+                showToast('⚠️ Error: ' + data.message);
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            showToast('⚠️ Error adding to playlist.');
+        });
+    }
+    </script>
+
+    <script>
+    function showToast(message) {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.classList.add('toast');
+        toast.textContent = message;
+        toastContainer.appendChild(toast);
+    
+        setTimeout(() => {
+            toast.remove();
+        }, 4000); // Toast disappears after 4 seconds
+    }
+    
+    function addArtistToPlaylist(artist) {
+        fetch('/add_artist_to_playlist', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ item: artist })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                showToast('✅ Artist added to your list!');
+            } else {
+                showToast('⚠️ Error: ' + data.message);
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            showToast('⚠️ Error adding artist.');
+        });
+    }
+    </script>
+    
+    <script>
+    function deleteFromArtistPlaylist(artist) {
+        if (!confirm(`Are you sure you want to delete \"${artist}\" from your artists list?`)) {
+            return;
+        }
+    
+        fetch('/delete_artist_from_playlist', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ item: artist })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response not OK');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            alert('Error deleting artist.');
+        });
+    }
+    </script>
 <body>
     <div class="container">
+        <div id="toast-container" class="toast-container"></div>
         <div class="navbar">
             <a href="{{ url_for('home') }}" class="app-logo">
                 <i class="fas fa-headphones-alt"></i>

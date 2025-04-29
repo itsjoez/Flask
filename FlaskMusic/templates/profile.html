@@ -161,6 +161,7 @@
             margin: 0 0 0.5rem 0;
             background: var(--primary-gradient);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -172,10 +173,10 @@
 
         /* Cards Grid */
         .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 2rem;
-        }
+        display: flex;
+        flex-direction: column;
+        gap: 2rem; /* space between Favorites and Playlist */
+    }
 
         .card {
             background: var(--card-bg);
@@ -231,6 +232,46 @@
         .favorite-value {
             font-size: 1.1rem;
             font-weight: 500;
+        }
+
+        .favorites-display {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .favorite-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .delete-button {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: color 0.2s;
+            color: #ff5c5c; /* Trash and X are red */
+        }
+
+        .confirm-yes {
+            color: #1DB954; /* Green checkmark */
+        }
+
+        .confirm-no {
+            color: #ff5c5c; /* Red X */
+        }
+
+        .favorite-box {
+            background: #2c2c2c;
+            padding: 10px 15px;
+            border-radius: 10px;
+            flex-grow: 1;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
         /* Flash Messages */
@@ -317,7 +358,8 @@
     </style>
 </head>
 <body>
-    <!-- Flash Messages -->
+
+    <!-- Flash Messages (optional if you use them) -->
     <div class="flash-messages">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -327,7 +369,7 @@
             {% endif %}
         {% endwith %}
     </div>
-
+    
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <div class="sidebar">
@@ -335,118 +377,285 @@
                 <i class="fas fa-headphones-alt"></i>
                 <span>Maestro</span>
             </div>
-
+    
             <ul class="nav-links">
-                <li class="nav-item">
-                    <a href="{{ url_for('home') }}" class="nav-link">
-                        <i class="fas fa-home"></i>
-                        <span>Home</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{ url_for('index') }}" class="nav-link">
-                        <i class="fas fa-search"></i>
-                        <span>Discover</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{ url_for('profile') }}" class="nav-link active">
-                        <i class="fas fa-user"></i>
-                        <span>Profile</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{{ url_for('logout') }}" class="nav-link">
-                        <i class="fas fa-sign-out-alt"></i>
-                        <span>Logout</span>
-                    </a>
-                </li>
+                <li class="nav-item"><a href="{{ url_for('home') }}" class="nav-link"><i class="fas fa-home"></i><span>Home</span></a></li>
+                <li class="nav-item"><a href="{{ url_for('index') }}" class="nav-link"><i class="fas fa-search"></i><span>Discover</span></a></li>
+                <li class="nav-item"><a href="{{ url_for('profile') }}" class="nav-link active"><i class="fas fa-user"></i><span>Profile</span></a></li>
+                <li class="nav-item"><a href="{{ url_for('logout') }}" class="nav-link"><i class="fas fa-sign-out-alt"></i><span>Logout</span></a></li>
             </ul>
         </div>
-
+    
         <!-- Main Content -->
         <div class="main-content">
             <!-- Profile Header -->
             <div class="profile-header">
-                <div class="profile-pic-container">
-                    <img id="profile-pic" src="{{ url_for('static', filename='default-profile.png') }}" alt="Profile Photo">
-                    <div class="profile-pic-overlay">
-                        <i class="fas fa-camera"></i>
+    
+                <!-- PROFILE PICTURE FORM -->
+                <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data" class="profile-pic-form">
+                    <div class="profile-pic-container" style="margin-left: 20px;">
+                        <img id="profile-pic" src="{{ url_for('static', filename='uploads/' + user.profile_pic) }}" alt="Profile Photo">
+                        <div class="profile-pic-overlay">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                        <input type="file" id="profile-upload" name="profile_pic" accept="image/*" onchange="this.form.submit()">
                     </div>
-                    <input type="file" id="profile-upload" accept="image/*">
-                </div>
-
-                <div class="profile-info">
+                </form>
+    
+                <!-- User Info -->
+                <div class="profile-info" style="margin-left: 20px;">
                     <h1>Welcome, {{ user.username }}!</h1>
                     <div class="profile-email">{{ user.email }}</div>
                 </div>
             </div>
-
+    
             <!-- Cards Grid -->
             <div class="cards-grid">
-                <!-- Favorites Card -->
-                <div class="card">
+                <!-- Playlist Card -->
+                <div class="card" style="margin-left: 20px;">
                     <div class="card-header">
-                        <h2 class="card-title">
-                            <i class="fas fa-heart"></i>
-                            Your Favorites
-                        </h2>
+                        <h2 class="card-title"><i class="fas fa-music"></i>Your Playlist</h2>
                     </div>
+                    <div class="favorites-display">
+                        {% if recent_vibes %}
+                            {% for vibe in recent_vibes %}
+                            <div class="favorite-item">
+                                <button class="delete-button" onclick="deleteFromPlaylist('{{ vibe }}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <div class="favorite-box">
+                                    {{ vibe }}
+                                </div>
+                            </div>                            
+                            {% endfor %}
+                        {% else %}
+                            <div class="favorite-item">
+                                <div class="favorite-value">Your playlist is empty. Add some music!</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
 
+                <!-- Your Artists Card -->
+                <div class="card" style="margin-left: 20px;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-user"></i>Your Artists</h2>
+                    </div>
+                    <div class="favorites-display">
+                        {% if recent_artists %}
+                                {% for artist in recent_artists %}
+                                <div class="favorite-item">
+                                    <button class="delete-button" onclick="deleteFromArtistPlaylist('{{ artist }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    <div class="favorite-box">
+                                        {{ artist }}
+                                    </div>
+                                </div>
+                                
+                                
+                            {% endfor %}
+                        {% else %}
+                            <div class="favorite-item">
+                                <div class="favorite-value">You haven't added any artists yet.</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Favorites Card -->
+                <div class="card" style="margin-left: 20px;">
+                    <div class="card-header">
+                        <h2 class="card-title"><i class="fas fa-heart"></i>Your Favorites</h2>
+                    </div>
                     <div class="favorites-display">
                         <div class="favorite-item">
                             <div class="favorite-label">Favorite Artist</div>
-                            <div class="favorite-value">Ed Sheeran</div>
+                            <div class="favorite-value">{{ user.favorite_artist }}</div>
                         </div>
-
                         <div class="favorite-item">
                             <div class="favorite-label">Favorite Song</div>
-                            <div class="favorite-value">Shape of You</div>
+                            <div class="favorite-value">{{ user.favorite_song }}</div>
                         </div>
-
                         <div class="favorite-item">
                             <div class="favorite-label">Favorite Genre</div>
-                            <div class="favorite-value">Pop</div>
+                            <div class="favorite-value">{{ user.favorite_genre }}</div>
                         </div>
                     </div>
                 </div>
+
             </div>
+    
         </div>
     </div>
 
     <script>
-        // JavaScript to handle profile photo upload and preview
-        const profileUpload = document.getElementById('profile-upload');
-        const profilePic = document.getElementById('profile-pic');
-        const profilePicOverlay = document.querySelector('.profile-pic-overlay');
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toast-container') || createToastContainer();
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+        
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+        
+        function createToastContainer() {
+            const container = document.createElement('div');
+            container.id = 'toast-container';
+            container.style.position = 'fixed';
+            container.style.top = '20px';
+            container.style.right = '20px';
+            container.style.zIndex = '9999';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '10px';
+            document.body.appendChild(container);
+            return container;
+        }
+    </script>
 
-        // Show overlay on hover
-        profilePicOverlay.addEventListener('click', function() {
-            profileUpload.click();
+    <script>
+        // When you click on profile-pic-overlay, trigger file input
+        document.querySelector('.profile-pic-overlay').addEventListener('click', function() {
+            document.getElementById('profile-upload').click();
         });
+    </script>
 
-        profileUpload.addEventListener('change', function (event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    profilePic.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
+    <script>
         // Auto-hide flash messages after 5 seconds
         setTimeout(function() {
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(alert => {
                 alert.style.opacity = '0';
-                alert.style.transform = 'translateX(100%)';
+                alert.style.transform = 'translateY(-20px)';
                 setTimeout(() => {
                     alert.remove();
                 }, 300);
             });
         }, 5000);
+
+        // Function to delete from playlist (example)
+        function deleteFromPlaylist(vibe) {
+            // Implement your delete logic here
+            console.log('Delete:', vibe);
+        }
     </script>
-</body>
+
+<script>
+    function deleteFromPlaylist(vibe) {
+        const button = event.target.closest('button');
+    
+        // If user confirms delete (checkmark button)
+        if (button.classList.contains('confirm-yes')) {
+            fetch('/delete_from_playlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ item: vibe })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response not OK');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    location.reload(); // Refresh playlist after delete
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error deleting item.');
+            });
+    
+        } else if (button.classList.contains('confirm-no')) {
+            // If user clicks the "X" to cancel
+            button.parentNode.innerHTML = `
+                <button class="delete-button" onclick="deleteFromPlaylist('${vibe}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <div class="favorite-box">${vibe}</div>
+            `;
+        } else {
+            // First click - show Checkmark and X
+            const parent = button.parentNode;
+            parent.innerHTML = `
+                <button class="delete-button confirm-yes" onclick="deleteFromPlaylist('${vibe}')">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="delete-button confirm-no" onclick="deleteFromPlaylist('${vibe}')">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="favorite-box">${vibe}</div>
+            `;
+        }
+    }
+    </script>
+    
+
+<script>
+    function deleteFromArtistPlaylist(artist) {
+        const button = event.target.closest('button');
+    
+        // If user confirms delete (checkmark button)
+        if (button.classList.contains('confirm-yes')) {
+            fetch('/delete_artist_from_playlist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ item: artist })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response not OK');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    location.reload(); // Refresh list after deleting
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert('Error deleting artist.');
+            });
+    
+        } else if (button.classList.contains('confirm-no')) {
+            // If user clicks the "X" to cancel
+            button.parentNode.innerHTML = `
+                <button class="delete-button" onclick="deleteFromArtistPlaylist('${artist}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+                <div class="favorite-box">${artist}</div>
+            `;
+        } else {
+            // First click - show Checkmark and X
+            const parent = button.parentNode;
+            parent.innerHTML = `
+                <button class="delete-button confirm-yes" onclick="deleteFromArtistPlaylist('${artist}')">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="delete-button confirm-no" onclick="deleteFromArtistPlaylist('${artist}')">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div class="favorite-box">${artist}</div>
+            `;
+        }
+    }
+    </script>
+    
+    
+    
+    </body>
 </html>
